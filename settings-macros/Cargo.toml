@@ -1,0 +1,14 @@
+[package]
+name = "settings-macros"
+version = "0.1.0"
+edition = "2021"
+authors = ["sam0x17"]
+homepage = "https://sam0x17.dev"
+description = "Macros crate for `crate-settings`"
+license = "MIT"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+settings-core = { path = "../settings-core", version = "0.1.0" }

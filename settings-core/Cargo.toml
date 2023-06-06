@@ -1,0 +1,11 @@
+[package]
+name = "settings-core"
+version = "0.1.0"
+edition = "2021"
+homepage = "https://sam0x17.dev"
+description = "Core implementation for `crate-settings`"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
