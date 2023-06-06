@@ -1,4 +1,4 @@
-use std::{env::current_dir, fs::read_to_string};
+use std::{env::current_dir, fs::read_to_string, path::PathBuf};
 
 use derive_syn_parse::Parse;
 use proc_macro::TokenStream;
@@ -88,45 +88,71 @@ fn emit_toml_value(value: Value) -> Result<TokenStream2> {
     }
 }
 
-fn settings_internal(tokens: impl Into<TokenStream2>) -> Result<TokenStream2> {
-    let args = parse2::<SettingsProcArgs>(tokens.into())?;
-    let Ok(current_dir) = current_dir() else {
-		return Err(Error::new(Span::call_site(), "Failed to read current directory."));
-	};
+fn settings_internal_helper(
+    namespace: String,
+    key: String,
+    current_dir: PathBuf,
+) -> Result<TokenStream2> {
+    let parent_cargo_toml = match current_dir.parent() {
+        Some(parent) => {
+            let parent_toml = parent.join("Cargo.toml");
+            match parent_toml.exists() {
+                true => Some(parent_toml),
+                false => None,
+            }
+        }
+        None => None,
+    };
     let cargo_toml_path = current_dir.join("Cargo.toml");
     let Ok(cargo_toml) = read_to_string(&cargo_toml_path) else {
+		if let Some(parent_cargo_toml) = parent_cargo_toml {
+			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to read '{}'",
 			cargo_toml_path.display(),
 		)));
 	};
-    let namespace = args.namespace.value();
-    let key = args.key.value();
     let Ok(cargo_toml) = cargo_toml.parse::<Table>() else {
+		if let Some(parent_cargo_toml) = parent_cargo_toml {
+			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to parse '{}' as valid TOML.",
 			cargo_toml_path.display(),
 		)));
 	};
     let Some(package) = cargo_toml.get("package") else {
+		if let Some(parent_cargo_toml) = parent_cargo_toml {
+			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package' in '{}'.",
 			cargo_toml_path.display(),
 		)));
 	};
     let Some(metadata) = package.get("metadata") else {
+		if let Some(parent_cargo_toml) = parent_cargo_toml {
+			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package.metadata' in '{}'.",
 			cargo_toml_path.display(),
 		)));
 	};
     let Some(settings) = metadata.get("settings") else {
+		if let Some(parent_cargo_toml) = parent_cargo_toml {
+			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package.metadata.settings' in '{}'.",
 			cargo_toml_path.display(),
 		)));
 	};
     let Some(namespace_table) = settings.get(&namespace) else {
+		if let Some(parent_cargo_toml) = parent_cargo_toml {
+			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package.metadata.settings.{}' in '{}'.",
 			namespace,
@@ -134,6 +160,9 @@ fn settings_internal(tokens: impl Into<TokenStream2>) -> Result<TokenStream2> {
 		)));
 	};
     let Some(value) = namespace_table.get(&key) else {
+		if let Some(parent_cargo_toml) = parent_cargo_toml {
+			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package.metadata.settings.{}.{}' in '{}'.",
 			namespace,
@@ -142,4 +171,12 @@ fn settings_internal(tokens: impl Into<TokenStream2>) -> Result<TokenStream2> {
 		)));
 	};
     emit_toml_value(value.clone())
+}
+
+fn settings_internal(tokens: impl Into<TokenStream2>) -> Result<TokenStream2> {
+    let args = parse2::<SettingsProcArgs>(tokens.into())?;
+    let Ok(current_dir) = current_dir() else {
+		return Err(Error::new(Span::call_site(), "Failed to read current directory."));
+	};
+    settings_internal_helper(args.namespace.value(), args.key.value(), current_dir)
 }
