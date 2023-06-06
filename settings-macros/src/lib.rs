@@ -22,6 +22,72 @@ struct SettingsProcArgs {
     key: LitStr,
 }
 
+#[derive(PartialEq, Copy, Clone)]
+enum ValueType {
+    String,
+    Integer,
+    Float,
+    Boolean,
+    Datetime,
+    Array,
+    Table,
+}
+
+trait GetValueType {
+    fn value_type(&self) -> ValueType;
+}
+
+impl GetValueType for Value {
+    fn value_type(&self) -> ValueType {
+        use ValueType::*;
+        match self {
+            Value::String(_) => String,
+            Value::Integer(_) => Integer,
+            Value::Float(_) => Float,
+            Value::Boolean(_) => Boolean,
+            Value::Datetime(_) => Datetime,
+            Value::Array(_) => Array,
+            Value::Table(_) => Table,
+        }
+    }
+}
+
+fn emit_toml_value(value: Value) -> Result<TokenStream2> {
+    match value {
+        Value::String(string) => Ok(quote!(#string)),
+        Value::Integer(integer) => Ok(quote!(#integer)),
+        Value::Float(float) => Ok(quote!(#float)),
+        Value::Boolean(bool) => Ok(quote!(#bool)),
+        Value::Datetime(date_time) => {
+            let date_time = date_time.to_string();
+            Ok(quote!(#date_time))
+        }
+        Value::Array(arr) => {
+            let mut new_arr: Vec<TokenStream2> = Vec::new();
+            let mut current_type: Option<ValueType> = None;
+            for value in arr.iter() {
+                if let Some(typ) = current_type {
+                    if typ != value.value_type() {
+                        let arr = arr.iter().map(|item| match item.as_str() {
+                            Some(st) => String::from(st),
+                            None => item.to_string(),
+                        });
+                        return Ok(quote!([#(#arr),*]));
+                    }
+                } else {
+                    current_type = Some(value.value_type());
+                }
+                new_arr.push(emit_toml_value(value.clone())?)
+            }
+            Ok(quote!([#(#new_arr),*]))
+        }
+        Value::Table(table) => {
+            let st = format!("{{ {} }}", table.to_string().trim().replace("\n", ", "));
+            Ok(quote!(#st))
+        }
+    }
+}
+
 fn settings_internal(tokens: impl Into<TokenStream2>) -> Result<TokenStream2> {
     let args = parse2::<SettingsProcArgs>(tokens.into())?;
     let Ok(current_dir) = current_dir() else {
@@ -75,24 +141,5 @@ fn settings_internal(tokens: impl Into<TokenStream2>) -> Result<TokenStream2> {
 			cargo_toml_path.display(),
 		)));
 	};
-    Ok(match value {
-        Value::String(string) => quote!(#string),
-        Value::Integer(integer) => quote!(#integer),
-        Value::Float(float) => quote!(#float),
-        Value::Boolean(bool) => quote!(#bool),
-        Value::Datetime(datetime) => {
-            let datetime = datetime.to_string();
-            quote!(#datetime)
-        }
-        Value::Array(arr) => {
-            let arr = arr.as_slice().iter().map(|item| item.to_string());
-            quote!([#(#arr),*])
-        }
-        Value::Table(_) => {
-            return Err(Error::new(
-                Span::call_site(),
-                "Tables within a namespace are not supported at this time",
-            ));
-        }
-    })
+    emit_toml_value(value.clone())
 }

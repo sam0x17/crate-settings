@@ -18,3 +18,5 @@ settings-macros = { path = "settings-macros", version = "0.1.0" }
 [package.metadata.settings]
 example-crate = { some-key = "hey", something_else = false }
 another-crate = { number = 33, float = 55.6, arr = ["a", "b", "c"] }
+cool_crate = { some_date_time = 1979-05-27 07:32:00Z, int_arr = [1, 2, 3, 4, 5, 6] }
+weird_crate = { mixed_arr = ["hey", 1, false], table = { key1 = "hey", key2 = 3 } }
