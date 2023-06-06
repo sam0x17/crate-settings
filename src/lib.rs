@@ -1,3 +1,3 @@
 pub use settings_macros::*;
 
-settings!("example-crate", "some-key");
+const _SOME_KEY: &'static str = settings!("example-crate", "some-key");
