@@ -11,4 +11,8 @@ license = "MIT"
 proc-macro = true
 
 [dependencies]
-settings-core = { path = "../settings-core", version = "0.1.0" }
+toml = "0.7"
+proc-macro2 = "1"
+syn = "2"
+quote = "1"
+derive-syn-parse = "0.1.5"

@@ -1,5 +1,5 @@
 [workspace]
-members = ["settings-core", "settings-macros"]
+members = ["settings-macros"]
 
 [package]
 name = "crate-settings"
@@ -12,7 +12,6 @@ keywords = ["settings", "compile-time", "environment", "feature"]
 license = "MIT"
 
 [dependencies]
-settings-core = { path = "settings-core", version = "0.1.0" }
 settings-macros = { path = "settings-macros", version = "0.1.0" }
 
 # the following metadata is used by tests
