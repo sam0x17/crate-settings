@@ -92,13 +92,22 @@ fn emit_toml_value(value: Value) -> Result<TokenStream2> {
 /// Finds the root of the current workspace, falling back to the outer-most directory with a
 /// Cargo.toml, and then falling back to the current directory.
 fn workspace_root() -> PathBuf {
-    let mut current_dir = current_dir().expect("failed to unwrap env::current_dir()!");
+    let mut current_dir = current_dir().expect("Failed to read current directory.");
     let mut best_match = current_dir.clone();
     loop {
         let cargo_toml = current_dir.join("Cargo.toml");
         if let Ok(cargo_toml) = read_to_string(&cargo_toml) {
             best_match = current_dir.clone();
-            if cargo_toml.contains("[workspace]") {
+            if let Ok(cargo_toml) = cargo_toml.parse::<Table>() {
+                if cargo_toml.contains_key("workspace") {
+                    return best_match;
+                }
+            } else if cargo_toml.contains("[workspace]") || {
+                let mut cargo_toml = cargo_toml.clone();
+                cargo_toml.retain(|c| !c.is_whitespace());
+                cargo_toml.contains("workspace=")
+            } {
+                // only used if `Cargo.toml` is invalid TOML
                 return best_match;
             }
         }
@@ -124,7 +133,6 @@ fn crate_root<S: AsRef<str>>(crate_name: S, current_dir: &PathBuf) -> PathBuf {
         let Some(name) = package.get("name") else { continue };
         let Value::String(name) = name else { continue };
         if name == crate_name.as_ref() {
-            println!("found it: {}", path.parent().unwrap().display());
             return path.parent().unwrap().to_path_buf();
         }
     }
@@ -136,12 +144,6 @@ fn settings_internal_helper(
     key: String,
     current_dir: PathBuf,
 ) -> Result<TokenStream2> {
-    println!(
-        "settings_internal_helper({}, {}, {})",
-        crate_name,
-        key,
-        current_dir.display()
-    );
     let parent_dir = match current_dir.parent() {
         Some(parent_dir) => {
             let parent_toml = parent_dir.join("Cargo.toml");
