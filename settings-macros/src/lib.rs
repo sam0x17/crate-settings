@@ -6,6 +6,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{parse2, Error, LitStr, Result, Token};
 use toml::{Table, Value};
+use walkdir::WalkDir;
 
 #[proc_macro]
 pub fn settings(tokens: TokenStream) -> TokenStream {
@@ -17,7 +18,7 @@ pub fn settings(tokens: TokenStream) -> TokenStream {
 
 #[derive(Parse)]
 struct SettingsProcArgs {
-    namespace: LitStr,
+    crate_name: LitStr,
     #[prefix(Token![,])]
     key: LitStr,
 }
@@ -88,16 +89,64 @@ fn emit_toml_value(value: Value) -> Result<TokenStream2> {
     }
 }
 
+/// Finds the root of the current workspace, falling back to the outer-most directory with a
+/// Cargo.toml, and then falling back to the current directory.
+fn workspace_root() -> PathBuf {
+    let mut current_dir = current_dir().expect("failed to unwrap env::current_dir()!");
+    let mut best_match = current_dir.clone();
+    loop {
+        let cargo_toml = current_dir.join("Cargo.toml");
+        if let Ok(cargo_toml) = read_to_string(&cargo_toml) {
+            best_match = current_dir.clone();
+            if cargo_toml.contains("[workspace]") {
+                return best_match;
+            }
+        }
+        match current_dir.parent() {
+            Some(dir) => current_dir = dir.to_path_buf(),
+            None => break,
+        }
+    }
+    best_match
+}
+
+fn crate_root<S: AsRef<str>>(crate_name: S, current_dir: &PathBuf) -> PathBuf {
+    let root = workspace_root();
+    for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let Some(file_name) = path.file_name() else { continue };
+        if file_name != "Cargo.toml" {
+            continue;
+        }
+        let Ok(cargo_toml) = read_to_string(path) else { continue };
+        let Ok(cargo_toml) = cargo_toml.parse::<Table>() else { continue };
+        let Some(package) = cargo_toml.get("package") else { continue };
+        let Some(name) = package.get("name") else { continue };
+        let Value::String(name) = name else { continue };
+        if name == crate_name.as_ref() {
+            println!("found it: {}", path.parent().unwrap().display());
+            return path.parent().unwrap().to_path_buf();
+        }
+    }
+    current_dir.clone()
+}
+
 fn settings_internal_helper(
-    namespace: String,
+    crate_name: String,
     key: String,
     current_dir: PathBuf,
 ) -> Result<TokenStream2> {
-    let parent_cargo_toml = match current_dir.parent() {
-        Some(parent) => {
-            let parent_toml = parent.join("Cargo.toml");
+    println!(
+        "settings_internal_helper({}, {}, {})",
+        crate_name,
+        key,
+        current_dir.display()
+    );
+    let parent_dir = match current_dir.parent() {
+        Some(parent_dir) => {
+            let parent_toml = parent_dir.join("Cargo.toml");
             match parent_toml.exists() {
-                true => Some(parent_toml),
+                true => Some(parent_dir.to_path_buf()),
                 false => None,
             }
         }
@@ -105,8 +154,8 @@ fn settings_internal_helper(
     };
     let cargo_toml_path = current_dir.join("Cargo.toml");
     let Ok(cargo_toml) = read_to_string(&cargo_toml_path) else {
-		if let Some(parent_cargo_toml) = parent_cargo_toml {
-			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
 		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to read '{}'",
@@ -114,8 +163,8 @@ fn settings_internal_helper(
 		)));
 	};
     let Ok(cargo_toml) = cargo_toml.parse::<Table>() else {
-		if let Some(parent_cargo_toml) = parent_cargo_toml {
-			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
 		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to parse '{}' as valid TOML.",
@@ -123,8 +172,8 @@ fn settings_internal_helper(
 		)));
 	};
     let Some(package) = cargo_toml.get("package") else {
-		if let Some(parent_cargo_toml) = parent_cargo_toml {
-			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
 		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package' in '{}'.",
@@ -132,8 +181,8 @@ fn settings_internal_helper(
 		)));
 	};
     let Some(metadata) = package.get("metadata") else {
-		if let Some(parent_cargo_toml) = parent_cargo_toml {
-			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
 		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package.metadata' in '{}'.",
@@ -141,31 +190,31 @@ fn settings_internal_helper(
 		)));
 	};
     let Some(settings) = metadata.get("settings") else {
-		if let Some(parent_cargo_toml) = parent_cargo_toml {
-			return settings_internal_helper(namespace, key, parent_cargo_toml);
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
 		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package.metadata.settings' in '{}'.",
 			cargo_toml_path.display(),
 		)));
 	};
-    let Some(namespace_table) = settings.get(&namespace) else {
-		if let Some(parent_cargo_toml) = parent_cargo_toml {
-			return settings_internal_helper(namespace, key, parent_cargo_toml);
+    let Some(crate_name_table) = settings.get(&crate_name) else {
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
 		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package.metadata.settings.{}' in '{}'.",
-			namespace,
+			crate_name,
 			cargo_toml_path.display(),
 		)));
 	};
-    let Some(value) = namespace_table.get(&key) else {
-		if let Some(parent_cargo_toml) = parent_cargo_toml {
-			return settings_internal_helper(namespace, key, parent_cargo_toml);
+    let Some(value) = crate_name_table.get(&key) else {
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
 		}
 		return Err(Error::new(Span::call_site(), format!(
 			"Failed to find table 'package.metadata.settings.{}.{}' in '{}'.",
-			namespace,
+			crate_name,
 			key,
 			cargo_toml_path.display(),
 		)));
@@ -178,5 +227,6 @@ fn settings_internal(tokens: impl Into<TokenStream2>) -> Result<TokenStream2> {
     let Ok(current_dir) = current_dir() else {
 		return Err(Error::new(Span::call_site(), "Failed to read current directory."));
 	};
-    settings_internal_helper(args.namespace.value(), args.key.value(), current_dir)
+    let starting_dir = crate_root(args.crate_name.value(), &current_dir);
+    settings_internal_helper(args.crate_name.value(), args.key.value(), starting_dir)
 }

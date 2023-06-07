@@ -1,0 +1,11 @@
+[package]
+name = "inner_b"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+crate-settings = { path = "../../../", version = "0.1.0" }
+
+
+[package.metadata.settings]
+inner_c = { some_bool = true, some_int = 37 }

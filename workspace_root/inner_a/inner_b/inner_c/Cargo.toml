@@ -1,8 +1,12 @@
 [package]
-name = "workspace_root"
+name = "inner_c"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+crate-settings = { path = "../../../../", version = "0.1.0" }
+
+[package.metadata.settings]
+inner_c = { some_inner_int = 34 }
