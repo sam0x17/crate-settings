@@ -147,6 +147,7 @@ fn settings_internal_helper(
     key: String,
     current_dir: PathBuf,
 ) -> Result<TokenStream2> {
+    println!("checking {}", current_dir.display());
     let parent_dir = match current_dir.parent() {
         Some(parent_dir) => {
             let parent_toml = parent_dir.join("Cargo.toml");
