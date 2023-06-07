@@ -13,7 +13,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["sam0x17"]
 homepage = "https://sam0x17.dev"
-description = "Set custom crate settings via a `[package.metadata.settings]` table in `Cargo.toml` and access these settings at compile-time and run-time."
+description = "Allows compile-time access to crate-specific settings defined as metadata in Cargo.toml."
 keywords = ["settings", "compile-time", "environment", "feature"]
 license = "MIT"
 
