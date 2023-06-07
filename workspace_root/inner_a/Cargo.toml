@@ -1,10 +1,10 @@
 [package]
 name = "inner_a"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-crate-settings = { path = "../../", version = "0.1.0" }
+crate-settings = { path = "../../", version = "0.0.1" }
 
 [package.metadata.settings]
 inner_c = { something_further_out = 44, some_int = 38 }
