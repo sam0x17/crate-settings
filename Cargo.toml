@@ -22,9 +22,6 @@ settings-macros = { path = "settings-macros", version = "0.0.1" }
 
 [dev-dependencies]
 workspace_root = { path = "workspace_root", version = "0.0.1" }
-inner_a = { path = "workspace_root/inner_a", version = "0.0.1" }
-inner_b = { path = "workspace_root/inner_a/inner_b", version = "0.0.1" }
-inner_c = { path = "workspace_root/inner_a/inner_b/inner_c", version = "0.0.1" }
 
 # the following metadata is used by tests
 [package.metadata.settings]
