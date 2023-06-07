@@ -3,8 +3,8 @@ use std::{env::current_dir, fs::read_to_string, path::PathBuf};
 use derive_syn_parse::Parse;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
-use syn::{parse2, Error, LitStr, Result, Token};
+use quote::{quote, ToTokens};
+use syn::{parse2, Error, Expr, LitStr, Result, Token};
 use toml::{Table, Value};
 use walkdir::WalkDir;
 
@@ -21,6 +21,9 @@ struct SettingsProcArgs {
     crate_name: LitStr,
     #[prefix(Token![,])]
     key: LitStr,
+    _comma2: Option<Token![,]>,
+    #[parse_if(_comma2.is_some())]
+    default: Option<Expr>,
 }
 
 #[derive(PartialEq, Copy, Clone)]
@@ -230,5 +233,13 @@ fn settings_internal(tokens: impl Into<TokenStream2>) -> Result<TokenStream2> {
 		return Err(Error::new(Span::call_site(), "Failed to read current directory."));
 	};
     let starting_dir = crate_root(args.crate_name.value(), &current_dir);
-    settings_internal_helper(args.crate_name.value(), args.key.value(), starting_dir)
+    match settings_internal_helper(args.crate_name.value(), args.key.value(), starting_dir) {
+        Ok(tokens) => Ok(tokens),
+        Err(err) => {
+            if let Some(default) = args.default {
+                return Ok(default.to_token_stream());
+            }
+            Err(err)
+        }
+    }
 }

@@ -5,13 +5,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_defaults() {
+        assert_eq!(settings!("made-up", "something", "a value"), "a value");
+        assert_eq!(settings!("test", "test", 14798), 14798);
+    }
+
+    #[test]
     fn test_strings() {
-        assert_eq!(settings!("example-crate", "some-key"), "hey");
+        assert_eq!(settings!("example-crate", "some-key", "something"), "hey");
     }
 
     #[test]
     fn test_integers() {
-        assert_eq!(settings!("another-crate", "number"), 33);
+        assert_eq!(settings!("another-crate", "number", 100), 33);
     }
 
     #[test]
