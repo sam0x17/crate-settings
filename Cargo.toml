@@ -1,5 +1,11 @@
 [workspace]
-members = ["settings-macros"]
+members = [
+	"settings-macros",
+	"tests/workspace_root",
+	"tests/workspace_root/inner_a",
+	"tests/workspace_root/inner_a/inner_b",
+	"tests/workspace_root/inner_a/inner_b/inner_c"
+]
 
 [package]
 name = "crate-settings"
@@ -13,6 +19,12 @@ license = "MIT"
 
 [dependencies]
 settings-macros = { path = "settings-macros", version = "0.1.0" }
+
+[dev-dependencies]
+workspace_root = { path = "tests/workspace_root", version = "0.1.0" }
+inner_a = { path = "tests/workspace_root/inner_a", version = "0.1.0" }
+inner_b = { path = "tests/workspace_root/inner_a/inner_b", version = "0.1.0" }
+inner_c = { path = "tests/workspace_root/inner_a/inner_b/inner_c", version = "0.1.0" }
 
 # the following metadata is used by tests
 [package.metadata.settings]
