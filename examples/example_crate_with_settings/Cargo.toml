@@ -7,4 +7,4 @@ description = "A crate demonstrating configurable crate settings from the `crate
 license = "MIT"
 
 [dependencies]
-crate-settings = { path = "../../", version = "0.0.1" }
+crate-settings = { path = "../../", version = "0.0.2" }

@@ -10,7 +10,7 @@ members = [
 
 [package]
 name = "crate-settings"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 authors = ["sam0x17"]
 homepage = "https://sam0x17.dev"
@@ -19,7 +19,7 @@ keywords = ["settings", "compile-time", "environment", "feature"]
 license = "MIT"
 
 [dependencies]
-settings-macros = { path = "settings-macros", version = "0.0.1" }
+settings-macros = { path = "settings-macros", version = "0.0.2" }
 
 # the following metadata is used by tests
 [package.metadata.settings]
