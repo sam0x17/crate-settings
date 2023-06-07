@@ -1,6 +1,7 @@
 [workspace]
 members = [
 	"settings-macros",
+	"examples/example_crate_with_settings",
 	"examples/workspace_root",
 	"examples/workspace_root/inner_a",
 	"examples/workspace_root/inner_a/inner_b",
