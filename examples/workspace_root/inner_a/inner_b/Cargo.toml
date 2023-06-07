@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-crate-settings = { path = "../../../", version = "0.0.1" }
+crate-settings = { path = "../../../../", version = "0.0.1" }
 
 
 [package.metadata.settings]

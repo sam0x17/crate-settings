@@ -1,10 +1,10 @@
 [workspace]
 members = [
 	"settings-macros",
-	"workspace_root",
-	"workspace_root/inner_a",
-	"workspace_root/inner_a/inner_b",
-	"workspace_root/inner_a/inner_b/inner_c"
+	"examples/workspace_root",
+	"examples/workspace_root/inner_a",
+	"examples/workspace_root/inner_a/inner_b",
+	"examples/workspace_root/inner_a/inner_b/inner_c"
 ]
 
 [package]
@@ -19,9 +19,6 @@ license = "MIT"
 
 [dependencies]
 settings-macros = { path = "settings-macros", version = "0.0.1" }
-
-[dev-dependencies]
-workspace_root = { path = "workspace_root", version = "0.0.1" }
 
 # the following metadata is used by tests
 [package.metadata.settings]
