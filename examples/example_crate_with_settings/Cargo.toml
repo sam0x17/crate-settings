@@ -1,10 +1,10 @@
 [package]
 name = "example_crate_with_settings"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 authors = ["sam0x17"]
 description = "A crate demonstrating configurable crate settings from the `crate-settings` crate"
 license = "MIT"
 
 [dependencies]
-crate-settings = { path = "../../", version = "0.0.2" }
+crate-settings = { path = "../../", version = "0.0.3" }

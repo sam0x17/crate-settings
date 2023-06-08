@@ -1,11 +1,11 @@
 [package]
 name = "workspace_root"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 publish = false
 
 [dependencies]
-crate-settings = { path = "../../", version = "0.0.2" }
+crate-settings = { path = "../../", version = "0.0.3" }
 
 [package.metadata.settings]
 inner_c = { only_outer = true, some_int = 67 }
