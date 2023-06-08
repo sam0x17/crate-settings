@@ -148,7 +148,11 @@ fn settings_internal_helper(
     current_dir: PathBuf,
 ) -> Result<TokenStream2> {
     println!("checking {}", current_dir.display());
-    println!("MANIFEST: {}", std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    println!(
+        "CARGO_MANIFEST_DIR: {}",
+        std::env::var("CARGO_MANIFEST_DIR").unwrap()
+    );
+    println!("OUT_DIR: {:?}", std::env::var("OUT_DIR"));
     let parent_dir = match current_dir.parent() {
         Some(parent_dir) => {
             let parent_toml = parent_dir.join("Cargo.toml");

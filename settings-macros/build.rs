@@ -11,4 +11,8 @@ fn main() {
         "cargo:warning=MACROS:CARGO_MANIFEST_DIR={}",
         std::env::var("CARGO_MANIFEST_DIR").unwrap()
     );
+    println!(
+        "cargo:rustc-env=OUT_DIR={}",
+        std::env::var("OUT_DIR").unwrap()
+    )
 }
