@@ -1,6 +1,6 @@
 [package]
 name = "settings-macros"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 authors = ["sam0x17"]
 homepage = "https://sam0x17.dev"
