@@ -1,6 +1,6 @@
 [package]
 name = "example_crate_with_settings"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 authors = ["sam0x17"]
 description = "A crate demonstrating configurable crate settings from the `crate-settings` crate"
