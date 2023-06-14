@@ -1,60 +1,245 @@
-pub use settings_macros::*;
+use std::{env::current_dir, fs::read_to_string, path::PathBuf};
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+use derive_syn_parse::Parse;
+use proc_macro::TokenStream;
+use proc_macro2::{Span, TokenStream as TokenStream2};
+use quote::{quote, ToTokens};
+use syn::{parse2, Error, Expr, LitStr, Result, Token};
+use toml::{Table, Value};
+use walkdir::WalkDir;
 
-    #[test]
-    fn test_defaults() {
-        assert_eq!(settings!("made-up", "something", "a value"), "a value");
-        assert_eq!(settings!("test", "test", 14798), 14798);
+#[proc_macro]
+pub fn settings(tokens: TokenStream) -> TokenStream {
+    match settings_internal(tokens) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
     }
+}
 
-    #[test]
-    fn test_strings() {
-        assert_eq!(settings!("example-crate", "some-key", "something"), "hey");
+#[derive(Parse)]
+struct SettingsProcArgs {
+    crate_name: LitStr,
+    #[prefix(Token![,])]
+    key: LitStr,
+    _comma2: Option<Token![,]>,
+    #[parse_if(_comma2.is_some())]
+    default: Option<Expr>,
+}
+
+#[derive(PartialEq, Copy, Clone)]
+enum ValueType {
+    String,
+    Integer,
+    Float,
+    Boolean,
+    Datetime,
+    Array,
+    Table,
+}
+
+trait GetValueType {
+    fn value_type(&self) -> ValueType;
+}
+
+impl GetValueType for Value {
+    fn value_type(&self) -> ValueType {
+        use ValueType::*;
+        match self {
+            Value::String(_) => String,
+            Value::Integer(_) => Integer,
+            Value::Float(_) => Float,
+            Value::Boolean(_) => Boolean,
+            Value::Datetime(_) => Datetime,
+            Value::Array(_) => Array,
+            Value::Table(_) => Table,
+        }
     }
+}
 
-    #[test]
-    fn test_integers() {
-        assert_eq!(settings!("another-crate", "number", 100), 33);
+fn emit_toml_value(value: Value) -> Result<TokenStream2> {
+    match value {
+        Value::String(string) => Ok(quote!(#string)),
+        Value::Integer(integer) => Ok(quote!(#integer)),
+        Value::Float(float) => Ok(quote!(#float)),
+        Value::Boolean(bool) => Ok(quote!(#bool)),
+        Value::Datetime(date_time) => {
+            let date_time = date_time.to_string();
+            Ok(quote!(#date_time))
+        }
+        Value::Array(arr) => {
+            let mut new_arr: Vec<TokenStream2> = Vec::new();
+            let mut current_type: Option<ValueType> = None;
+            for value in arr.iter() {
+                if let Some(typ) = current_type {
+                    if typ != value.value_type() {
+                        let arr = arr.iter().map(|item| match item.as_str() {
+                            Some(st) => String::from(st),
+                            None => item.to_string(),
+                        });
+                        return Ok(quote!([#(#arr),*]));
+                    }
+                } else {
+                    current_type = Some(value.value_type());
+                }
+                new_arr.push(emit_toml_value(value.clone())?)
+            }
+            Ok(quote!([#(#new_arr),*]))
+        }
+        Value::Table(table) => {
+            let st = format!("{{ {} }}", table.to_string().trim().replace("\n", ", "));
+            Ok(quote!(#st))
+        }
     }
+}
 
-    #[test]
-    fn test_floats() {
-        assert_eq!(settings!("another-crate", "float"), 55.6);
+/// Finds the root of the current workspace, falling back to the outer-most directory with a
+/// Cargo.toml, and then falling back to the current directory.
+fn workspace_root() -> PathBuf {
+    let mut current_dir = current_dir().expect("Failed to read current directory.");
+    let mut best_match = current_dir.clone();
+    loop {
+        let cargo_toml = current_dir.join("Cargo.toml");
+        if let Ok(cargo_toml) = read_to_string(&cargo_toml) {
+            best_match = current_dir.clone();
+            if let Ok(cargo_toml) = cargo_toml.parse::<Table>() {
+                if cargo_toml.contains_key("workspace") {
+                    return best_match;
+                }
+            } else if cargo_toml.contains("[workspace]") || {
+                let mut cargo_toml = cargo_toml.clone();
+                cargo_toml.retain(|c| !c.is_whitespace());
+                cargo_toml.contains("workspace=")
+            } {
+                // only used if `Cargo.toml` is invalid TOML
+                return best_match;
+            }
+        }
+        match current_dir.parent() {
+            Some(dir) => current_dir = dir.to_path_buf(),
+            None => break,
+        }
     }
+    best_match
+}
 
-    #[test]
-    fn test_date_times() {
-        assert_eq!(
-            settings!("cool_crate", "some_date_time"),
-            "1979-05-27T07:32:00Z"
-        )
+fn crate_root<S: AsRef<str>>(crate_name: S, current_dir: &PathBuf) -> PathBuf {
+    let root = workspace_root();
+    for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let Some(file_name) = path.file_name() else { continue };
+        if file_name != "Cargo.toml" {
+            continue;
+        }
+        let Ok(cargo_toml) = read_to_string(path) else { continue };
+        let Ok(cargo_toml) = cargo_toml.parse::<Table>() else { continue };
+        let Some(package) = cargo_toml.get("package") else { continue };
+        let Some(name) = package.get("name") else { continue };
+        let Value::String(name) = name else { continue };
+        if name == crate_name.as_ref() {
+            return path.parent().unwrap().to_path_buf();
+        }
     }
+    current_dir.clone()
+}
 
-    #[test]
-    fn test_bools() {
-        assert_eq!(settings!("example-crate", "something_else"), false);
-    }
+fn settings_internal_helper(
+    crate_name: String,
+    key: String,
+    current_dir: PathBuf,
+) -> Result<TokenStream2> {
+    let parent_dir = match current_dir.parent() {
+        Some(parent_dir) => {
+            let parent_toml = parent_dir.join("Cargo.toml");
+            match parent_toml.exists() {
+                true => Some(parent_dir.to_path_buf()),
+                false => None,
+            }
+        }
+        None => None,
+    };
+    let cargo_toml_path = current_dir.join("Cargo.toml");
+    let Ok(cargo_toml) = read_to_string(&cargo_toml_path) else {
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
+		}
+		return Err(Error::new(Span::call_site(), format!(
+			"Failed to read '{}'",
+			cargo_toml_path.display(),
+		)));
+	};
+    let Ok(cargo_toml) = cargo_toml.parse::<Table>() else {
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
+		}
+		return Err(Error::new(Span::call_site(), format!(
+			"Failed to parse '{}' as valid TOML.",
+			cargo_toml_path.display(),
+		)));
+	};
+    let Some(package) = cargo_toml.get("package") else {
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
+		}
+		return Err(Error::new(Span::call_site(), format!(
+			"Failed to find table 'package' in '{}'.",
+			cargo_toml_path.display(),
+		)));
+	};
+    let Some(metadata) = package.get("metadata") else {
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
+		}
+		return Err(Error::new(Span::call_site(), format!(
+			"Failed to find table 'package.metadata' in '{}'.",
+			cargo_toml_path.display(),
+		)));
+	};
+    let Some(settings) = metadata.get("settings") else {
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
+		}
+		return Err(Error::new(Span::call_site(), format!(
+			"Failed to find table 'package.metadata.settings' in '{}'.",
+			cargo_toml_path.display(),
+		)));
+	};
+    let Some(crate_name_table) = settings.get(&crate_name) else {
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
+		}
+		return Err(Error::new(Span::call_site(), format!(
+			"Failed to find table 'package.metadata.settings.{}' in '{}'.",
+			crate_name,
+			cargo_toml_path.display(),
+		)));
+	};
+    let Some(value) = crate_name_table.get(&key) else {
+		if let Some(parent_dir) = parent_dir {
+			return settings_internal_helper(crate_name, key, parent_dir);
+		}
+		return Err(Error::new(Span::call_site(), format!(
+			"Failed to find table 'package.metadata.settings.{}.{}' in '{}'.",
+			crate_name,
+			key,
+			cargo_toml_path.display(),
+		)));
+	};
+    emit_toml_value(value.clone())
+}
 
-    #[test]
-    fn test_string_arrays() {
-        assert_eq!(settings!("another-crate", "arr"), ["a", "b", "c"]);
-    }
-
-    #[test]
-    fn test_mixed_arrays() {
-        // mixed arrays get automatically loaded as string arrays
-        assert_eq!(settings!("weird_crate", "mixed_arr"), ["hey", "1", "false"]);
-    }
-
-    #[test]
-    fn test_tables() {
-        // tables get automatically converted to strings
-        assert_eq!(
-            settings!("weird_crate", "table"),
-            "{ key1 = \"hey\", key2 = 3 }"
-        )
+fn settings_internal(tokens: impl Into<TokenStream2>) -> Result<TokenStream2> {
+    let args = parse2::<SettingsProcArgs>(tokens.into())?;
+    let Ok(current_dir) = current_dir() else {
+		return Err(Error::new(Span::call_site(), "Failed to read current directory."));
+	};
+    let starting_dir = crate_root(args.crate_name.value(), &current_dir);
+    match settings_internal_helper(args.crate_name.value(), args.key.value(), starting_dir) {
+        Ok(tokens) => Ok(tokens),
+        Err(err) => {
+            if let Some(default) = args.default {
+                return Ok(default.to_token_stream());
+            }
+            Err(err)
+        }
     }
 }

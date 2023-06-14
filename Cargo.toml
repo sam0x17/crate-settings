@@ -1,6 +1,5 @@
 [workspace]
 members = [
-	"settings-macros",
 	"examples/example_crate_with_settings",
 	"examples/workspace_root",
 	"examples/workspace_root/inner_a",
@@ -18,8 +17,16 @@ description = "Allows compile-time access to crate-specific settings defined as 
 keywords = ["settings", "compile-time", "environment", "feature"]
 license = "MIT"
 
+[lib]
+proc-macro = true
+
 [dependencies]
-settings-macros = { path = "settings-macros", version = "0.0.5" }
+toml = "0.7"
+proc-macro2 = "1"
+syn = "2"
+quote = "1"
+derive-syn-parse = "0.1.5"
+walkdir = "2"
 
 # the following metadata is used by tests
 [package.metadata.settings]

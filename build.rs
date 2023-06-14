@@ -1,14 +1,10 @@
 fn main() {
-    println!(
-        "cargo:warning=OUT_DIR={}",
-        std::env::var("OUT_DIR").unwrap()
-    );
-    println!(
-        "cargo:warning=CARGO_PKG_NAME={}",
-        std::env::var("CARGO_PKG_NAME").unwrap()
-    );
-    println!(
-        "cargo:warning=CARGO_MANIFEST_DIR={}",
-        std::env::var("CARGO_MANIFEST_DIR").unwrap()
-    );
+    if let Ok(var) = std::env::var("CARGO_MANIFEST_DIR") {
+        if var.contains(".cargo") {
+            println!(
+                "cargo:warning=`crate-settings` must be a direct dependency for it to work \
+                properly."
+            );
+        }
+    }
 }
