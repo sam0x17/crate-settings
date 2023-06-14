@@ -1,11 +1,11 @@
 [package]
 name = "inner_b"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 publish = false
 
 [dependencies]
-crate-settings = { path = "../../../../", version = "0.0.5" }
+crate-settings = { path = "../../../../", version = "0" }
 
 
 [package.metadata.settings]
